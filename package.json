@@ -1,15 +1,34 @@
 {
-  "name": "a2a-artifact-graph",
-  "version": "1.0.0",
-  "main": "index.js",
+  "name": "@ryukez/a2a-artifact-graph",
+  "version": "0.1.0",
+  "description": "A2A Artifact Graph is a TypeScript library for managing and processing artifacts in a directed acyclic graph structure.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
   "scripts": {
+    "build": "tsc",
     "test": "jest",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "prepare": "npm run build"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "a2a",
+    "artifact",
+    "graph",
+    "typescript"
+  ],
+  "author": "Ryunosuke",
   "license": "ISC",
-  "description": "",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ryunosuke/a2a-artifact-graph.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ryunosuke/a2a-artifact-graph/issues"
+  },
+  "homepage": "https://github.com/ryunosuke/a2a-artifact-graph#readme",
   "devDependencies": {
     "@types/jest": "^29.5.14",
     "@types/node": "^22.14.1",

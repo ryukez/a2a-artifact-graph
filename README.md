@@ -1,4 +1,4 @@
-## ArtifactGraph
+## @ryukez/a2a-artifact-graph
 
 A lightweight framework for building **declarative, data‑driven task pipelines** on top of the [A2A protocol](https://github.com/a2a-protocol).  
 It is designed to make step‑wise executions **clear, reproducible and resumable**, which is a natural fit for LLM‑powered agents.
@@ -18,7 +18,7 @@ It is designed to make step‑wise executions **clear, reproducible and resumabl
 ## Installation
 
 ```bash
-npm install ryukez/a2a-artifact-graph
+npm install @ryukez/a2a-artifact-graph
 ```
 
 ---
