@@ -56,6 +56,7 @@ class Step3Artifact extends UniqueArtifact<"step3"> {
 type Artifacts = [Step1Artifact, Step2Artifact, Step3Artifact];
 
 const step1Builder = defineBuilder<Artifacts>()({
+  name: "Step 1",
   inputs: () => [] as const,
   outputs: () => ["step1"] as const,
   async *build({ history }) {
@@ -73,6 +74,7 @@ const step1Builder = defineBuilder<Artifacts>()({
 });
 
 const step2Builder = defineBuilder<Artifacts>()({
+  name: "Step 2",
   inputs: () => ["step1"] as const,
   outputs: () => ["step2"] as const,
   async *build({ inputs }) {
@@ -87,6 +89,7 @@ const step2Builder = defineBuilder<Artifacts>()({
 });
 
 const step3Builder = defineBuilder<Artifacts>()({
+  name: "Step 3",
   inputs: () => ["step2"] as const,
   outputs: () => ["step3"] as const,
   async *build({ inputs }) {
@@ -115,7 +118,7 @@ export async function* mathAgent({
     [step1Builder, step2Builder, step3Builder]
   );
 
-  for await (const update of graph.run(task, history)) {
+  for await (const update of graph.run({ task, history, verbose: true })) {
     yield update;
   }
 }

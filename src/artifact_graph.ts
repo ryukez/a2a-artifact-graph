@@ -14,6 +14,8 @@ export interface ArtifactBuilder<
   I extends readonly (keyof ArtifactRecord<All>)[] = any,
   O extends readonly (keyof ArtifactRecord<All>)[] = any
 > {
+  name: string;
+
   inputs(): I;
   outputs(): O;
 
@@ -49,10 +51,13 @@ export class ArtifactGraph<Artifacts extends readonly UniqueArtifact[]> {
     private readonly builders: ArtifactBuilder<Artifacts, any>[]
   ) {}
 
-  async *run(
-    task: schema.Task,
-    history?: schema.Message[]
-  ): AsyncGenerator<TaskYieldUpdate, schema.Task | void, unknown> {
+  async *run(input: {
+    task: schema.Task;
+    history?: schema.Message[];
+    verbose?: boolean;
+  }): AsyncGenerator<TaskYieldUpdate, schema.Task | void, unknown> {
+    const { task, history, verbose = false } = input;
+
     const artifacts = Object.create(null) as {
       [K in Artifacts[number] as K["id"]]: K;
     };
@@ -66,29 +71,77 @@ export class ArtifactGraph<Artifacts extends readonly UniqueArtifact[]> {
       artifacts[id] = this.artifacts[id](artifact);
     }
 
-    for (const builders of sortBuilders(this.builders)) {
-      // TODO: parallelize builders
-      for (const builder of builders) {
-        // Skip if all outputs are already calculated
-        const outputs = builder.outputs() as (keyof typeof artifacts)[];
-        if (outputs.every((o) => artifacts[o])) {
-          continue;
-        }
+    // Skip if all outputs are already calculated
+    const skippedBuilders = this.builders.filter((b) => {
+      const outputs = b.outputs() as (keyof typeof artifacts)[];
+      return outputs.every((o) => artifacts[o]);
+    });
+    // Sort builders so that required inputs should be calculated before the builder itself
+    const sortedBuilders = sortBuilders(
+      this.builders.filter((b) => !skippedBuilders.includes(b))
+    );
 
-        const keys = builder.inputs() as (keyof typeof artifacts)[];
-        const inputs = {} as Pick<typeof artifacts, (typeof keys)[number]>;
-        for (const k of keys) {
-          if (!artifacts[k]) {
-            throw new Error(`Artifact ${k} is not found`);
+    if (verbose) {
+      // yield execution plan message
+      yield {
+        state: "working",
+        message: {
+          role: "agent",
+          parts: [
+            {
+              type: "text",
+              text: `
+Following builders will be skipped, because results are already calculated:
+${skippedBuilders.map((b) => b.name).join(", ")}
+
+Execution plan:
+${sortedBuilders
+  .map((g) => "[" + g.map((b) => b.name).join(", ") + "]")
+  .join("->")}
+      `,
+            },
+          ],
+        },
+      };
+    }
+
+    const skippedBuildersSet = new Set(skippedBuilders);
+
+    for (const builders of sortedBuilders) {
+      // Execute builders in parallel
+      const results = await Promise.all(
+        builders.map(async (builder) => {
+          if (skippedBuildersSet.has(builder)) {
+            return [];
           }
-          inputs[k] = artifacts[k];
-        }
 
-        for await (const update of builder.build({
-          task,
-          history,
-          inputs,
-        })) {
+          const keys = builder.inputs() as (keyof typeof artifacts)[];
+          const inputs = {} as Pick<typeof artifacts, (typeof keys)[number]>;
+          for (const k of keys) {
+            if (!artifacts[k]) {
+              throw new Error(`Artifact ${k} is not found`);
+            }
+            inputs[k] = artifacts[k];
+          }
+
+          const updates: (
+            | TaskYieldUpdate
+            | ArtifactRecord<Artifacts>[keyof ArtifactRecord<Artifacts>]
+          )[] = [];
+          for await (const update of builder.build({
+            task,
+            history,
+            inputs,
+          })) {
+            updates.push(update);
+          }
+          return updates;
+        })
+      );
+
+      // Process results sequentially
+      for (const updates of results) {
+        for (const update of updates) {
           if (isUniqueArtifact(update)) {
             update.artifact.metadata = {
               ...update.artifact.metadata,

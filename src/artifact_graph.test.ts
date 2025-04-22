@@ -78,7 +78,7 @@ describe("ArtifactGraph.run (with real schema import)", () => {
   it("yields artifacts with artifactGraph.id metadata", async () => {
     const graph = createGraph([step1Builder]);
     const outs: schema.Artifact[] = [];
-    for await (const o of graph.run(emptyTask())) {
+    for await (const o of graph.run({ task: emptyTask() })) {
       if ("parts" in o) {
         outs.push(o);
       }
@@ -92,7 +92,9 @@ describe("ArtifactGraph.run (with real schema import)", () => {
   it("passes through TaskYieldUpdate objects unchanged", async () => {
     const graph = createGraph([step1Builder]);
     const gotten: any[] = [];
-    for await (const o of graph.run(emptyTask())) gotten.push(o);
+    for await (const o of graph.run({ task: emptyTask() })) {
+      gotten.push(o);
+    }
 
     expect(gotten[0]).toHaveProperty("note", "building‑step1");
     // Second item is the generated artifact
@@ -106,7 +108,7 @@ describe("ArtifactGraph.run (with real schema import)", () => {
     const graph = createGraph([step1Builder, step2Builder]);
     const ids: string[] = [];
 
-    for await (const u of graph.run(emptyTask())) {
+    for await (const u of graph.run({ task: emptyTask() })) {
       if ("parts" in u) {
         const id = (u as schema.Artifact).metadata?.["artifactGraph.id"];
         if (id) ids.push(id as string);
@@ -125,14 +127,14 @@ describe("ArtifactGraph.run (with real schema import)", () => {
     const spy = jest.fn(step1Builder.build);
     const graph = createGraph([{ ...step1Builder, build: spy }]);
 
-    await drain(graph.run({ ...emptyTask(), artifacts: [pre] }));
+    await drain(graph.run({ task: { ...emptyTask(), artifacts: [pre] } }));
     expect(spy).not.toHaveBeenCalled();
   });
 
   /* ---------- Missing Input Error ---------- */
   it("throws if required input artifact is missing", async () => {
     const graph = createGraph([step2Builder]);
-    await expect(drain(graph.run(emptyTask()))).rejects.toThrow(
+    await expect(drain(graph.run({ task: emptyTask() }))).rejects.toThrow(
       "Artifact step1 is not found"
     );
   });
@@ -157,7 +159,7 @@ describe("ArtifactGraph.run (with real schema import)", () => {
       },
     ]);
 
-    await drain(graph.run(emptyTask(), hist));
+    await drain(graph.run({ task: emptyTask(), history: hist }));
     expect(spyGen).toHaveBeenCalledTimes(1);
   });
 
@@ -177,7 +179,7 @@ describe("ArtifactGraph.run (with real schema import)", () => {
     };
 
     const graph = createGraph([complexBuilder]);
-    await drain(graph.run({ ...emptyTask(), artifacts: [pre] }));
+    await drain(graph.run({ task: { ...emptyTask(), artifacts: [pre] } }));
     expect(complexBuilder.build).toHaveBeenCalled();
   });
 });
