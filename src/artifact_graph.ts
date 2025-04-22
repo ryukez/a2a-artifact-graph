@@ -105,43 +105,30 @@ ${sortedBuilders
       };
     }
 
-    const skippedBuildersSet = new Set(skippedBuilders);
+    const skippedBuildersSet = new Set(
+      skippedBuilders.map((builder) => builder.name)
+    );
 
     for (const builders of sortedBuilders) {
-      // Execute builders in parallel
-      const results = await Promise.all(
-        builders.map(async (builder) => {
-          if (skippedBuildersSet.has(builder)) {
-            return [];
-          }
+      for (const builder of builders) {
+        if (skippedBuildersSet.has(builder.name)) {
+          continue;
+        }
 
-          const keys = builder.inputs() as (keyof typeof artifacts)[];
-          const inputs = {} as Pick<typeof artifacts, (typeof keys)[number]>;
-          for (const k of keys) {
-            if (!artifacts[k]) {
-              throw new Error(`Artifact ${k} is not found`);
-            }
-            inputs[k] = artifacts[k];
+        const keys = builder.inputs() as (keyof typeof artifacts)[];
+        const inputs = {} as Pick<typeof artifacts, (typeof keys)[number]>;
+        for (const k of keys) {
+          if (!artifacts[k]) {
+            throw new Error(`Artifact ${k} is not found`);
           }
+          inputs[k] = artifacts[k];
+        }
 
-          const updates: (
-            | TaskYieldUpdate
-            | ArtifactRecord<Artifacts>[keyof ArtifactRecord<Artifacts>]
-          )[] = [];
-          for await (const update of builder.build({
-            task,
-            history,
-            inputs,
-          })) {
-            updates.push(update);
-          }
-          return updates;
-        })
-      );
-
-      // Process results sequentially
-      for (const updates of results) {
-        for (const update of updates) {
+        for await (const update of builder.build({
+          task,
+          history,
+          inputs,
+        })) {
           if (isUniqueArtifact(update)) {
             update.artifact.metadata = {
               ...update.artifact.metadata,
