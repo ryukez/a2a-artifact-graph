@@ -1,4 +1,5 @@
 import { schema, TaskYieldUpdate } from "a2a-sdk-ryukez";
+import { sortBuilders } from "./sort_builders";
 
 export class UniqueArtifact<ID extends string = any> {
   constructor(public id: ID, public artifact: schema.Artifact) {}
@@ -65,36 +66,39 @@ export class ArtifactGraph<Artifacts extends readonly UniqueArtifact[]> {
       artifacts[id] = this.artifacts[id](artifact);
     }
 
-    for (const builder of this.builders) {
-      // Skip if all outputs are already calculated
-      const outputs = builder.outputs() as (keyof typeof artifacts)[];
-      if (outputs.every((o) => artifacts[o])) {
-        continue;
-      }
-
-      const keys = builder.inputs() as (keyof typeof artifacts)[];
-      const inputs = {} as Pick<typeof artifacts, (typeof keys)[number]>;
-      for (const k of keys) {
-        if (!artifacts[k]) {
-          throw new Error(`Artifact ${k} is not found`);
+    for (const builders of sortBuilders(this.builders)) {
+      // TODO: parallelize builders
+      for (const builder of builders) {
+        // Skip if all outputs are already calculated
+        const outputs = builder.outputs() as (keyof typeof artifacts)[];
+        if (outputs.every((o) => artifacts[o])) {
+          continue;
         }
-        inputs[k] = artifacts[k];
-      }
 
-      for await (const update of builder.build({
-        task,
-        history,
-        inputs,
-      })) {
-        if (isUniqueArtifact(update)) {
-          update.artifact.metadata = {
-            ...update.artifact.metadata,
-            "artifactGraph.id": update.id,
-          };
-          artifacts[update.id as keyof typeof artifacts] = update as any;
-          yield update.artifact;
-        } else {
-          yield update;
+        const keys = builder.inputs() as (keyof typeof artifacts)[];
+        const inputs = {} as Pick<typeof artifacts, (typeof keys)[number]>;
+        for (const k of keys) {
+          if (!artifacts[k]) {
+            throw new Error(`Artifact ${k} is not found`);
+          }
+          inputs[k] = artifacts[k];
+        }
+
+        for await (const update of builder.build({
+          task,
+          history,
+          inputs,
+        })) {
+          if (isUniqueArtifact(update)) {
+            update.artifact.metadata = {
+              ...update.artifact.metadata,
+              "artifactGraph.id": update.id,
+            };
+            artifacts[update.id as keyof typeof artifacts] = update as any;
+            yield update.artifact;
+          } else {
+            yield update;
+          }
         }
       }
     }
