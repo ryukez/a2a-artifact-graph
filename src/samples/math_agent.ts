@@ -1,7 +1,11 @@
 import { schema, TaskContext, TaskYieldUpdate } from "a2a-sdk-ryukez";
-import { ArtifactGraph, defineBuilder } from "../artifact_graph";
+import {
+  ArtifactGraph,
+  UniqueArtifact,
+  defineBuilder,
+} from "../artifact_graph";
 import assert from "assert";
-import { dataArtifact } from "../artifact";
+import { dataArtifact, tuplePartsArtifact } from "../artifact";
 import { z } from "zod";
 
 const Step1Artifact = dataArtifact(
@@ -18,12 +22,7 @@ const Step2Artifact = dataArtifact(
   })
 );
 
-const Step3Artifact = dataArtifact(
-  "step3",
-  z.object({
-    value: z.number(),
-  })
-);
+const Step3Artifact = tuplePartsArtifact("step3", ["text"]);
 
 type Artifacts = readonly [
   InstanceType<typeof Step1Artifact>,
@@ -77,10 +76,8 @@ const step3Builder = defineBuilder<Artifacts>()({
       throw new Error("Randomly failed in step3");
     }
 
-    yield Step3Artifact.fromData({
-      data: {
-        value: inputs.step2.parsed().value + 10,
-      },
+    yield Step3Artifact.fromParts({
+      parts: [{ type: "text", text: `${inputs.step2.parsed().value}` }],
     });
   },
 });
@@ -91,9 +88,9 @@ export async function* mathAgent({
 }: TaskContext): AsyncGenerator<TaskYieldUpdate, schema.Task | void, unknown> {
   const graph = new ArtifactGraph<Artifacts>(
     {
-      step1: (artifact) => new Step1Artifact(artifact),
-      step2: (artifact) => new Step2Artifact(artifact),
-      step3: (artifact) => new Step3Artifact(artifact),
+      step1: (artifact: schema.Artifact) => new Step1Artifact(artifact),
+      step2: (artifact: schema.Artifact) => new Step2Artifact(artifact),
+      step3: (artifact: schema.Artifact) => new Step3Artifact(artifact),
     },
     [step1Builder, step2Builder, step3Builder]
   );

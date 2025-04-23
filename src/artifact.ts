@@ -56,45 +56,127 @@ export function dataArtifact<const ID extends string, S extends z.Schema>(
  * Dynamically generates an Artifact class that holds a tuple type `parts`.
  *
  * @example
- *   const TextImageArtifact = tuplePartsArtifact("textImage");
+ *   const TextImageArtifact = tuplePartsArtifact("textImage", ["text", "image"]);
  *
  *   const art = TextImageArtifact.fromParts({
  *     parts: [
  *       { type: "text", text: "hello" },
  *       { type: "image", url: "https://…" },
- *     ] as const,           // ← Automatically infers tuple type from here
+ *     ]
  *   });
  *
  *   const [text, image] = art.parts();   // Type safe!
  */
-export function tuplePartsArtifact<const ID extends string>(id: ID) {
-  return class ArtifactClass<
-    T extends readonly schema.Part[]
-  > extends UniqueArtifact<ID> {
-    static readonly id = id;
+type PartByType = {
+  text: schema.TextPart;
+  file: schema.FilePart;
+  data: schema.DataPart;
+};
 
-    constructor(artifact: schema.Artifact) {
-      super(id, artifact);
+/* Helper type to convert a tuple of part types to a tuple of parts */
+type PartsFromTypes<T extends readonly (keyof PartByType)[]> = {
+  [K in keyof T]: PartByType[T[K]];
+};
+
+interface TuplePartsArtifactInstance<
+  ID extends string,
+  Parts extends readonly schema.Part[]
+> {
+  readonly id: ID;
+  readonly artifact: schema.Artifact;
+  parts(): Parts;
+}
+
+interface TuplePartsArtifactClassStatic<
+  ID extends string,
+  Parts extends readonly schema.Part[]
+> {
+  /* Can be instantiated with new */
+  new (artifact: schema.Artifact): TuplePartsArtifactInstance<ID, Parts>;
+
+  /* Static members */
+  readonly id: ID;
+  fromParts(
+    input: { parts: Parts } & Omit<schema.Artifact, "parts">
+  ): TuplePartsArtifactInstance<ID, Parts>;
+}
+
+type TuplePartsArtifactMakeClass<
+  ID extends string,
+  P extends readonly schema.Part[]
+> = TuplePartsArtifactClassStatic<ID, P>;
+
+/*─────────────────────────────────────────────*
+ |  Overload Declarations                    |
+ *─────────────────────────────────────────────*/
+
+/**
+ * A. **Pattern with `Parts` given as type parameter**
+ *    ```ts
+ *    const Foo = tuplePartsArtifact("foo")<
+ *      readonly [schema.TextPart, schema.FilePart]
+ *    >();
+ *    ```
+ */
+export function tuplePartsArtifact<const ID extends string>(
+  id: ID
+): <Parts extends readonly schema.Part[]>() => TuplePartsArtifactMakeClass<
+  ID,
+  Parts
+>;
+
+/**
+ * B. **Pattern to infer `Parts` from tag literals**
+ *    ```ts
+ *    const Foo = tuplePartsArtifact("foo", ["text", "file"] as const);
+ *    // parts(): readonly [schema.TextPart, schema.FilePart]
+ *    ```
+ */
+export function tuplePartsArtifact<
+  const ID extends string,
+  const Types extends readonly (keyof PartByType)[]
+>(id: ID, types: Types): TuplePartsArtifactMakeClass<ID, PartsFromTypes<Types>>;
+
+/*─────────────────────────────────────────────*
+ |  Single Runtime Implementation (for overload resolution) |
+ *─────────────────────────────────────────────*/
+export function tuplePartsArtifact(
+  id: string,
+  types?: readonly (keyof PartByType)[]
+) {
+  class ArtifactCls {
+    static readonly id = id as string;
+
+    constructor(public artifact: schema.Artifact) {}
+
+    parts(): unknown {
+      return this.artifact.parts as unknown;
     }
 
-    /** Returns the tuple type of parts */
-    parts(): T {
-      return this.artifact.parts as unknown as T;
-    }
-
-    /**
-     * Factory method. Creates a new artifact from the given parts.
-     * The parts are validated against the schema.
-     */
-    static fromParts<P extends readonly schema.Part[]>(
-      input: { parts: P } & Omit<schema.Artifact, "parts">
+    static fromParts(
+      input: { parts: readonly schema.Part[] } & Omit<schema.Artifact, "parts">
     ) {
-      const artifact = {
+      const art: schema.Artifact = {
         ...input,
-        parts: input.parts as unknown as schema.Part[],
+        parts: input.parts as schema.Part[],
       };
-
-      return new this(artifact);
+      return new this(art);
     }
-  };
+  }
+
+  if (types === undefined) {
+    return function <
+      Parts extends readonly schema.Part[]
+    >(): TuplePartsArtifactMakeClass<typeof id, Parts> {
+      return ArtifactCls as unknown as TuplePartsArtifactMakeClass<
+        typeof id,
+        Parts
+      >;
+    };
+  }
+
+  return ArtifactCls as unknown as TuplePartsArtifactMakeClass<
+    typeof id,
+    PartsFromTypes<typeof types>
+  >;
 }

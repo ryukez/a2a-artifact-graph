@@ -46,7 +46,7 @@ const isUniqueArtifact = (v: unknown): v is UniqueArtifact =>
 export class ArtifactGraph<Artifacts extends readonly UniqueArtifact[]> {
   constructor(
     private readonly artifacts: {
-      [K in Artifacts[number] as K["id"] & string]: (
+      [K in Artifacts[number] as Extract<K["id"], string>]: (
         artifact: schema.Artifact
       ) => K;
     },
@@ -66,7 +66,7 @@ export class ArtifactGraph<Artifacts extends readonly UniqueArtifact[]> {
 
     /* Map */
     const artifacts = Object.create(null) as {
-      [K in Artifacts[number] as K["id"] & string]: K;
+      [K in Artifacts[number] as Extract<K["id"], string>]: K;
     };
 
     /* Load existing artifacts */
