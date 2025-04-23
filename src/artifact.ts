@@ -144,15 +144,25 @@ export function tuplePartsArtifact(
   id: string,
   types?: readonly (keyof PartByType)[]
 ) {
-  class ArtifactCls {
+  class ArtifactCls extends UniqueArtifact<typeof id> {
     static readonly id = id as string;
 
-    constructor(public artifact: schema.Artifact) {}
+    constructor(artifact: schema.Artifact) {
+      /* Delegate id and artifact to UniqueArtifact constructor */
+      super(id as any, artifact);
+    }
 
+    /**
+     * Returns parts with proper typing. The actual tuple type is preserved via generics
+     * in the surrounding factory function.
+     */
     parts(): unknown {
       return this.artifact.parts as unknown;
     }
 
+    /**
+     * Factory: validates nothing but preserves types, mirroring dataArtifact.fromData()
+     */
     static fromParts(
       input: { parts: readonly schema.Part[] } & Omit<schema.Artifact, "parts">
     ) {

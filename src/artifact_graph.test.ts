@@ -1,5 +1,7 @@
 import { ArtifactGraph, UniqueArtifact } from "./artifact_graph";
 import { schema, TaskYieldUpdate } from "a2a-sdk-ryukez";
+import { dataArtifact, tuplePartsArtifact } from "./artifact";
+import { z } from "zod";
 
 /* -------------------------------------------------- */
 /*                Artifact Definitions                 */
@@ -180,5 +182,80 @@ describe("ArtifactGraph.run (with real schema import)", () => {
     const graph = createGraph([complexBuilder]);
     await drain(graph.run({ task: { ...emptyTask(), artifacts: [pre] } }));
     expect(complexBuilder.build).toHaveBeenCalled();
+  });
+});
+
+/* ================================================== */
+/*   tuplePartsArtifact & dataArtifact      */
+/* ================================================== */
+describe("ArtifactGraph with tuplePartsArtifact & dataArtifact", () => {
+  /* ---------- Definitions ---------- */
+  const UserArtifact = dataArtifact("user", z.object({ name: z.string() }));
+  const TextDataArtifact = tuplePartsArtifact("textData", [
+    "text",
+    "data",
+  ] as const);
+
+  /* ---------- Builders ---------- */
+  const userBuilder = {
+    name: "userBuilder",
+    inputs: () => [] as const,
+    outputs: () => ["user"] as const,
+    build: async function* () {
+      yield new UserArtifact({
+        parts: [{ type: "data", data: { name: "Alice" } }],
+      });
+    },
+  };
+
+  const textDataBuilder = {
+    name: "textDataBuilder",
+    inputs: () => [] as const,
+    outputs: () => ["textData"] as const,
+    build: async function* () {
+      yield new TextDataArtifact({
+        parts: [
+          { type: "text", text: "Hello" },
+          { type: "data", data: { url: "https://example.com/img.png" } },
+        ],
+      });
+    },
+  };
+
+  /* ---------- Graph ---------- */
+  const graph = new ArtifactGraph(
+    {
+      user: (a: schema.Artifact) => new UserArtifact(a),
+      textData: (a: schema.Artifact) => new TextDataArtifact(a),
+    },
+    [userBuilder, textDataBuilder]
+  );
+
+  it("assigns artifactGraph.id metadata for artifacts from tuplePartsArtifact & dataArtifact", async () => {
+    const outs: schema.Artifact[] = [];
+
+    for await (const o of graph.run({ task: emptyTask() })) {
+      if ("parts" in o) outs.push(o);
+    }
+
+    const userMeta = outs.find(
+      (a) => a.metadata?.["artifactGraph.id"] === "user"
+    );
+    const textDataMeta = outs.find(
+      (a) => a.metadata?.["artifactGraph.id"] === "textData"
+    );
+
+    expect(userMeta).toBeDefined();
+    expect(textDataMeta).toBeDefined();
+  });
+
+  it("dataArtifact class instances are UniqueArtifact", () => {
+    const art = new UserArtifact({ parts: [] });
+    expect(art).toBeInstanceOf(UniqueArtifact);
+  });
+
+  it("tuplePartsArtifact class instances are UniqueArtifact", () => {
+    const art = new TextDataArtifact({ parts: [] });
+    expect(art).toBeInstanceOf(UniqueArtifact);
   });
 });
