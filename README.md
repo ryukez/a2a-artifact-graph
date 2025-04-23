@@ -9,6 +9,7 @@ It is designed to make step‑wise executions **clear, reproducible and resumabl
 
 - **Typed boundary** – every _Builder_ declares **explicit input / output schemas**,
   making data‑flow & responsibility attribution crystal‑clear.
+- **Ergonomic artifact helpers** – Define type‑safe artifacts in one line with `dataArtifact()` and `tuplePartsArtifact()`.
 - **Automatic planning** – execution order is inferred from the **artifact dependency graph**;
   you only describe _what_ you need, not _how_ to get there.
 - **Fault tolerance** – failed steps can be **resumed or retried** without re‑running the entire pipeline.
@@ -32,89 +33,82 @@ Below is a condensed version of `src/samples/math_agent.ts` that demonstrates th
 3. **Run** the `ArtifactGraph`
 
 ```ts
-import { schema, TaskContext } from "a2a-sdk-ryukez";
+import { schema, TaskContext, TaskYieldUpdate } from "a2a-sdk-ryukez";
 import {
   ArtifactGraph,
   defineBuilder,
-  UniqueArtifact,
-} from "a2a-artifact-graph";
+  dataArtifact,
+  tuplePartsArtifact,
+} from "@ryukez/a2a-artifact-graph";
+import { z } from "zod";
 
-// 1. ────────────────────────────────────
-// Define strongly‑typed artifacts
-class NumberArtifact {
-  constructor(public readonly artifact: schema.Artifact) {}
-  value() {
-    return this.artifact.parts[0].data.value as number;
-  }
-  static from(n: number): NumberArtifact {
-    return new NumberArtifact({
-      type: "data",
-      parts: [{ type: "data", data: { value: n } }],
-    } as schema.Artifact);
-  }
-}
+/* 1. ── Define artifacts ────────────────────────────── */
+const Step1Artifact = dataArtifact("step1", z.object({ value: z.number() }));
 
-class Step1Artifact extends UniqueArtifact<"step1"> {
-  number = new NumberArtifact(this.artifact);
-}
-class Step2Artifact extends UniqueArtifact<"step2"> {
-  number = new NumberArtifact(this.artifact);
-}
-class Step3Artifact extends UniqueArtifact<"step3"> {
-  number = new NumberArtifact(this.artifact);
-}
+const Step2Artifact = dataArtifact("step2", z.object({ value: z.number() }));
 
-type Artifacts = [Step1Artifact, Step2Artifact, Step3Artifact];
+const Step3Artifact = tuplePartsArtifact("step3", ["text"]);
 
-// 2. ────────────────────────────────────
-// Define builders that transform artifacts
-const step1 = defineBuilder<Artifacts>()({
+type Artifacts = readonly [
+  InstanceType<typeof Step1Artifact>,
+  InstanceType<typeof Step2Artifact>,
+  InstanceType<typeof Step3Artifact>
+];
+
+/* 2. ── Define builders ─────────────────────────────── */
+const step1Builder = defineBuilder<Artifacts>()({
   name: "Step 1",
   inputs: () => [] as const,
   outputs: () => ["step1"] as const,
   async *build({ history }) {
-    const n = parseFloat(history![0].parts[0].text);
-    yield new Step1Artifact(NumberArtifact.from(n + 1).artifact);
+    const input = parseFloat(history![0].parts[0].text);
+    yield Step1Artifact.fromData({ data: { value: input + 1 } });
   },
 });
 
-const step2 = defineBuilder<Artifacts>()({
+const step2Builder = defineBuilder<Artifacts>()({
   name: "Step 2",
   inputs: () => ["step1"] as const,
   outputs: () => ["step2"] as const,
   async *build({ inputs }) {
-    yield new Step2Artifact(
-      NumberArtifact.from(inputs.step1.number.value() * 2).artifact
-    );
+    yield Step2Artifact.fromData({
+      data: { value: inputs.step1.parsed().value * 2 },
+    });
   },
 });
 
-const step3 = defineBuilder<Artifacts>()({
+const step3Builder = defineBuilder<Artifacts>()({
   name: "Step 3",
   inputs: () => ["step2"] as const,
   outputs: () => ["step3"] as const,
   async *build({ inputs }) {
-    yield new Step3Artifact(
-      NumberArtifact.from(inputs.step2.number.value() + 10).artifact
-    );
+    yield Step3Artifact.fromParts({
+      parts: [
+        {
+          type: "text",
+          text: `${inputs.step2.parsed().value}`,
+        },
+      ],
+    });
   },
 });
 
-// 3. ────────────────────────────────────
-// Assemble the graph and execute
-export async function* mathAgent({ task, history }: TaskContext) {
+/* 3. ── Assemble & run ──────────────────────────────── */
+export async function* mathAgent({
+  task,
+  history,
+}: TaskContext): AsyncGenerator<TaskYieldUpdate, schema.Task | void, unknown> {
   const graph = new ArtifactGraph<Artifacts>(
     {
-      step1: (a) => new Step1Artifact(a),
-      step2: (a) => new Step2Artifact(a),
-      step3: (a) => new Step3Artifact(a),
+      step1: (artifact) => new Step1Artifact(artifact),
+      step2: (artifact) => new Step2Artifact(artifact),
+      step3: (artifact) => new Step3Artifact(artifact),
     },
-    [step1, step2, step3]
+    [step1Builder, step2Builder, step3Builder]
   );
 
-  // Execution order is automatically planned: step1 ➜ step2 ➜ step3
-  for await (const update of graph.run({ task, history })) {
-    yield update; // Stream updates back to the caller
+  for await (const update of graph.run({ task, history, verbose: true })) {
+    yield update;
   }
 }
 ```
@@ -123,11 +117,12 @@ export async function* mathAgent({ task, history }: TaskContext) {
 
 ## API Overview
 
-| Concept           | Description                                                   |
-| ----------------- | ------------------------------------------------------------- |
-| **Artifact**      | Immutable piece of data flowing through the graph.            |
-| **Builder**       | Async generator that transforms input artifacts into outputs. |
-| **ArtifactGraph** | Orchestrates builders, resolves dependencies & executes.      |
+| Concept                               | Description                                                   |
+| ------------------------------------- | ------------------------------------------------------------- |
+| **Artifact**                          | Immutable piece of data flowing through the graph.            |
+| **Builder**                           | Async generator that transforms input artifacts into outputs. |
+| **ArtifactGraph**                     | Orchestrates builders, resolves dependencies & executes.      |
+| **dataArtifact / tuplePartsArtifact** | Utility functions to declare type‑safe artifacts in one line. |
 
 ### Resuming after a failure
 
