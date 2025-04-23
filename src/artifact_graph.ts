@@ -127,7 +127,9 @@ ${sortedBuilders
         const inputs = {} as Pick<typeof artifacts, (typeof keys)[number]>;
         for (const k of keys) {
           if (!artifacts[k]) {
-            throw new Error(`Artifact ${String(k)} is not found`);
+            throw new Error(
+              `${builder.name}: Artifact ${String(k)} is not found`
+            );
           }
           inputs[k] = artifacts[k];
         }
