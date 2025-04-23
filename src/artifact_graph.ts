@@ -1,5 +1,5 @@
 import { schema, TaskYieldUpdate } from "a2a-sdk-ryukez";
-import { sortBuilders } from "./sort_builders";
+import { sortBuilders, findUnreachableArtifacts } from "./graph";
 
 export class UniqueArtifact<ID extends string = any> {
   constructor(public id: ID, public artifact: schema.Artifact) {}
@@ -51,7 +51,12 @@ export class ArtifactGraph<Artifacts extends readonly UniqueArtifact[]> {
   constructor(
     private readonly artifactFactories: ArtifactFactories<Artifacts>,
     private readonly builders: ArtifactBuilder<Artifacts, any>[]
-  ) {}
+  ) {
+    const unreachable = findUnreachableArtifacts(builders);
+    if (unreachable.length > 0) {
+      throw new Error(`Unreachable artifact(s): ${unreachable.join(", ")}`);
+    }
+  }
 
   async *run(input: {
     task: schema.Task;

@@ -45,7 +45,7 @@ export function dataArtifact<const ID extends string, S extends z.Schema>(
       input: { data: z.infer<S> } & Omit<schema.Artifact, "parts">
     ) {
       return new this({
-        parts: [{ type: "data", data: input.data }],
+        parts: [{ type: "data", data: schema.parse(input.data) }],
         ...input,
       });
     }

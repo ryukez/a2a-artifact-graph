@@ -77,3 +77,46 @@ export const sortBuilders = <All extends readonly UniqueArtifact[]>(
 
   return result;
 };
+
+// Calculate reachable artifacts starting from builders that require no inputs.
+export const findUnreachableArtifacts = <All extends readonly UniqueArtifact[]>(
+  builders: ArtifactBuilder<All, any>[]
+): string[] => {
+  // Collect all inputs & outputs for later comparison
+  const allOutputs = new Set<string>();
+  const allInputs = new Set<string>();
+  for (const b of builders) {
+    for (const o of b.outputs() as readonly string[]) allOutputs.add(String(o));
+    for (const i of b.inputs() as readonly string[]) allInputs.add(String(i));
+  }
+
+  // Kahn‑like reachability analysis: start from builders with no inputs.
+  const reachable = new Set<string>();
+  const remaining = new Set(builders);
+
+  let advanced = true;
+  while (advanced) {
+    advanced = false;
+    for (const b of Array.from(remaining)) {
+      const ins = b.inputs() as readonly string[];
+      if (ins.every((i) => reachable.has(i))) {
+        // This builder can be executed; mark its outputs as reachable.
+        for (const o of b.outputs() as readonly string[])
+          reachable.add(String(o));
+        remaining.delete(b);
+        advanced = true;
+      }
+    }
+  }
+
+  // Reachable set now contains artifacts producible from empty input set.
+  // Any artifact that appears as an output or required input but is not reachable is unreachable.
+  const universe = new Set<string>([...allOutputs, ...allInputs]);
+  const unreachable: string[] = [];
+  for (const id of universe) {
+    if (!reachable.has(id)) {
+      unreachable.push(id);
+    }
+  }
+  return unreachable;
+};

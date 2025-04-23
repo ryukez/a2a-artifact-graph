@@ -131,11 +131,10 @@ describe("ArtifactGraph.run (with real schema import)", () => {
     expect(spy).not.toHaveBeenCalled();
   });
 
-  /* ---------- Missing Input Error ---------- */
-  it("throws if required input artifact is missing", async () => {
-    const graph = createGraph([step2Builder]);
-    await expect(drain(graph.run({ task: emptyTask() }))).rejects.toThrow(
-      "Artifact step1 is not found"
+  /* ---------- Unreachable Artifact Detection ---------- */
+  it("throws at construction when some artifacts are unreachable", () => {
+    expect(() => createGraph([step2Builder])).toThrow(
+      /Unreachable artifact\(s\):/ // message should list unreachable ids
     );
   });
 
