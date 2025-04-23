@@ -9,6 +9,10 @@ type ArtifactRecord<All extends readonly UniqueArtifact[]> = {
   [A in All[number] as A["id"] & string]: A;
 };
 
+export type ArtifactFactories<All extends readonly UniqueArtifact[]> = {
+  [K in All[number] as K["id"] & string]: (artifact: schema.Artifact) => K;
+};
+
 export interface ArtifactBuilder<
   All extends readonly UniqueArtifact[],
   I extends readonly (keyof ArtifactRecord<All>)[] = any,
@@ -45,11 +49,7 @@ const isUniqueArtifact = (v: unknown): v is UniqueArtifact =>
 
 export class ArtifactGraph<Artifacts extends readonly UniqueArtifact[]> {
   constructor(
-    private readonly artifacts: {
-      [K in Artifacts[number] as Extract<K["id"], string>]: (
-        artifact: schema.Artifact
-      ) => K;
-    },
+    private readonly artifactFactories: ArtifactFactories<Artifacts>,
     private readonly builders: ArtifactBuilder<Artifacts, any>[]
   ) {}
 
@@ -65,9 +65,7 @@ export class ArtifactGraph<Artifacts extends readonly UniqueArtifact[]> {
     const { task, history, verbose = false } = input;
 
     /* Map */
-    const artifacts = Object.create(null) as {
-      [K in Artifacts[number] as Extract<K["id"], string>]: K;
-    };
+    const artifacts = Object.create(null) as ArtifactRecord<Artifacts>;
 
     /* Load existing artifacts */
     for (const artifact of task.artifacts ?? []) {
@@ -75,7 +73,7 @@ export class ArtifactGraph<Artifacts extends readonly UniqueArtifact[]> {
         "artifactGraph.id"
       ] as keyof typeof artifacts;
       if (!id) continue;
-      artifacts[id] = this.artifacts[id](artifact);
+      artifacts[id] = this.artifactFactories[id](artifact);
     }
 
     /* Skip builders that already have all outputs */
