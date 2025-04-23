@@ -1,59 +1,35 @@
 import { schema, TaskContext, TaskYieldUpdate } from "a2a-sdk-ryukez";
-import {
-  ArtifactGraph,
-  defineBuilder,
-  UniqueArtifact,
-} from "../artifact_graph";
+import { ArtifactGraph, defineBuilder } from "../artifact_graph";
 import assert from "assert";
+import { dataArtifact } from "../artifact";
+import { z } from "zod";
 
-class NumberArtifact {
-  constructor(public readonly artifact: schema.Artifact) {}
+const Step1Artifact = dataArtifact(
+  "step1",
+  z.object({
+    value: z.number(),
+  })
+);
 
-  parsed(): number {
-    if (this.artifact.parts[0].type !== "data") {
-      throw new Error("Invalid artifact");
-    }
-    return this.artifact.parts[0].data.value as number;
-  }
+const Step2Artifact = dataArtifact(
+  "step2",
+  z.object({
+    value: z.number(),
+  })
+);
 
-  static from(
-    input: { number: number } & Omit<schema.Artifact, "parts">
-  ): NumberArtifact {
-    return new NumberArtifact({
-      ...input,
-      parts: [{ type: "data", data: { value: input.number } }],
-    });
-  }
-}
+const Step3Artifact = dataArtifact(
+  "step3",
+  z.object({
+    value: z.number(),
+  })
+);
 
-class Step1Artifact extends UniqueArtifact<"step1"> {
-  public readonly number: NumberArtifact;
-
-  constructor(artifact: schema.Artifact) {
-    super("step1", artifact);
-    this.number = new NumberArtifact(artifact);
-  }
-}
-
-class Step2Artifact extends UniqueArtifact<"step2"> {
-  public readonly number: NumberArtifact;
-
-  constructor(artifact: schema.Artifact) {
-    super("step2", artifact);
-    this.number = new NumberArtifact(artifact);
-  }
-}
-
-class Step3Artifact extends UniqueArtifact<"step3"> {
-  public readonly number: NumberArtifact;
-
-  constructor(artifact: schema.Artifact) {
-    super("step3", artifact);
-    this.number = new NumberArtifact(artifact);
-  }
-}
-
-type Artifacts = [Step1Artifact, Step2Artifact, Step3Artifact];
+type Artifacts = readonly [
+  InstanceType<typeof Step1Artifact>,
+  InstanceType<typeof Step2Artifact>,
+  InstanceType<typeof Step3Artifact>
+];
 
 const step1Builder = defineBuilder<Artifacts>()({
   name: "Step 1",
@@ -67,9 +43,11 @@ const step1Builder = defineBuilder<Artifacts>()({
       throw new Error("Randomly failed in step1");
     }
 
-    yield new Step1Artifact(
-      NumberArtifact.from({ number: input + 1 }).artifact
-    );
+    yield Step1Artifact.fromData({
+      data: {
+        value: input + 1,
+      },
+    });
   },
 });
 
@@ -82,9 +60,11 @@ const step2Builder = defineBuilder<Artifacts>()({
       throw new Error("Randomly failed in step2");
     }
 
-    yield new Step2Artifact(
-      NumberArtifact.from({ number: inputs.step1.number.parsed() * 2 }).artifact
-    );
+    yield Step2Artifact.fromData({
+      data: {
+        value: inputs.step1.parsed().value * 2,
+      },
+    });
   },
 });
 
@@ -97,11 +77,11 @@ const step3Builder = defineBuilder<Artifacts>()({
       throw new Error("Randomly failed in step3");
     }
 
-    yield new Step3Artifact(
-      NumberArtifact.from({
-        number: inputs.step2.number.parsed() + 10,
-      }).artifact
-    );
+    yield Step3Artifact.fromData({
+      data: {
+        value: inputs.step2.parsed().value + 10,
+      },
+    });
   },
 });
 

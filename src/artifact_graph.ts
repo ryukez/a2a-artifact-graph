@@ -6,7 +6,7 @@ export class UniqueArtifact<ID extends string = any> {
 }
 
 type ArtifactRecord<All extends readonly UniqueArtifact[]> = {
-  [A in All[number] as A["id"]]: A;
+  [A in All[number] as A["id"] & string]: A;
 };
 
 export interface ArtifactBuilder<
@@ -46,7 +46,9 @@ const isUniqueArtifact = (v: unknown): v is UniqueArtifact =>
 export class ArtifactGraph<Artifacts extends readonly UniqueArtifact[]> {
   constructor(
     private readonly artifacts: {
-      [K in Artifacts[number] as K["id"]]: (artifact: schema.Artifact) => K;
+      [K in Artifacts[number] as K["id"] & string]: (
+        artifact: schema.Artifact
+      ) => K;
     },
     private readonly builders: ArtifactBuilder<Artifacts, any>[]
   ) {}
@@ -55,34 +57,39 @@ export class ArtifactGraph<Artifacts extends readonly UniqueArtifact[]> {
     task: schema.Task;
     history?: schema.Message[];
     verbose?: boolean;
-  }): AsyncGenerator<TaskYieldUpdate, schema.Task | void, unknown> {
+  }): AsyncGenerator<
+    TaskYieldUpdate | schema.Artifact,
+    schema.Task | void,
+    unknown
+  > {
     const { task, history, verbose = false } = input;
 
+    /* Map */
     const artifacts = Object.create(null) as {
-      [K in Artifacts[number] as K["id"]]: K;
+      [K in Artifacts[number] as K["id"] & string]: K;
     };
 
+    /* Load existing artifacts */
     for (const artifact of task.artifacts ?? []) {
       const id = (artifact.metadata ?? {})[
         "artifactGraph.id"
       ] as keyof typeof artifacts;
       if (!id) continue;
-
       artifacts[id] = this.artifacts[id](artifact);
     }
 
-    // Skip if all outputs are already calculated
-    const skippedBuilders = this.builders.filter((b) => {
-      const outputs = b.outputs() as (keyof typeof artifacts)[];
-      return outputs.every((o) => artifacts[o]);
-    });
-    // Sort builders so that required inputs should be calculated before the builder itself
+    /* Skip builders that already have all outputs */
+    const skippedBuilders = this.builders.filter((b) =>
+      (b.outputs() as (keyof typeof artifacts)[]).every((o) => artifacts[o])
+    );
+
+    /* Determine execution order */
     const sortedBuilders = sortBuilders(
       this.builders.filter((b) => !skippedBuilders.includes(b))
     );
 
+    /* Notify execution plan (optional) */
     if (verbose) {
-      // yield execution plan message
       yield {
         state: "working",
         message: {
@@ -97,44 +104,42 @@ ${skippedBuilders.map((b) => b.name).join(", ")}
 Execution plan:
 ${sortedBuilders
   .map((g) => "[" + g.map((b) => b.name).join(", ") + "]")
-  .join("->")}
-      `,
+  .join(" -> ")}
+            `,
             },
           ],
         },
       };
     }
 
-    const skippedBuildersSet = new Set(
-      skippedBuilders.map((builder) => builder.name)
-    );
+    const skippedBuildersSet = new Set(skippedBuilders.map((b) => b.name));
 
+    /* ── Execution loop ── */
     for (const builders of sortedBuilders) {
       for (const builder of builders) {
-        if (skippedBuildersSet.has(builder.name)) {
-          continue;
-        }
+        if (skippedBuildersSet.has(builder.name)) continue;
 
+        /** Collect required inputs */
         const keys = builder.inputs() as (keyof typeof artifacts)[];
         const inputs = {} as Pick<typeof artifacts, (typeof keys)[number]>;
         for (const k of keys) {
           if (!artifacts[k]) {
-            throw new Error(`Artifact ${k} is not found`);
+            throw new Error(`Artifact ${String(k)} is not found`);
           }
           inputs[k] = artifacts[k];
         }
 
-        for await (const update of builder.build({
-          task,
-          history,
-          inputs,
-        })) {
+        /** Execute builder and process yielded values */
+        for await (const update of builder.build({ task, history, inputs })) {
           if (isUniqueArtifact(update)) {
+            /* Embed id in metadata */
             update.artifact.metadata = {
               ...update.artifact.metadata,
               "artifactGraph.id": update.id,
             };
             artifacts[update.id as keyof typeof artifacts] = update as any;
+
+            /* Pass schema.Artifact to the caller */
             yield update.artifact;
           } else {
             yield update;
