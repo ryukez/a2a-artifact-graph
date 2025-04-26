@@ -1,4 +1,4 @@
-import { schema, TaskYieldUpdate } from "a2a-sdk-ryukez";
+import { schema, TaskYieldUpdate } from "@ryukez/a2a-sdk";
 import { sortBuilders, findUnreachableArtifacts } from "./graph";
 
 export class UniqueArtifact<ID extends string = any> {

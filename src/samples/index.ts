@@ -1,5 +1,5 @@
 import { mathAgent, mathAgentCard } from "./math_agent";
-import { A2AServer } from "a2a-sdk-ryukez";
+import { A2AServer } from "@ryukez/a2a-sdk";
 
 const server = new A2AServer(mathAgent, {
   card: mathAgentCard,

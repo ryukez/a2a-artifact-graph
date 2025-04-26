@@ -33,7 +33,7 @@ Below is a condensed version of `src/samples/math_agent.ts` that demonstrates th
 3. **Run** the `ArtifactGraph`
 
 ```ts
-import { schema, TaskContext, TaskYieldUpdate } from "a2a-sdk-ryukez";
+import { schema, TaskContext, TaskYieldUpdate } from "@ryukez/a2a-sdk";
 import {
   ArtifactGraph,
   defineBuilder,

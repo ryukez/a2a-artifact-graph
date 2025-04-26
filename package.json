@@ -38,7 +38,7 @@
     "typescript": "^5.8.3"
   },
   "dependencies": {
-    "a2a-sdk-ryukez": "^0.4.5",
+    "@ryukez/a2a-sdk": "^0.4.5",
     "zod": "^3.24.3"
   }
 }

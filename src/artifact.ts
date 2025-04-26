@@ -1,4 +1,4 @@
-import { schema } from "a2a-sdk-ryukez";
+import { schema } from "@ryukez/a2a-sdk";
 import { UniqueArtifact } from "./artifact_graph";
 import { z } from "zod";
 

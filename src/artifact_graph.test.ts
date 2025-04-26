@@ -1,5 +1,5 @@
 import { ArtifactGraph, UniqueArtifact } from "./artifact_graph";
-import { schema, TaskYieldUpdate } from "a2a-sdk-ryukez";
+import { schema, TaskYieldUpdate } from "@ryukez/a2a-sdk";
 import { dataArtifact, tuplePartsArtifact } from "./artifact";
 import { z } from "zod";
 

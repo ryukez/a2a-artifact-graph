@@ -1,4 +1,4 @@
-import { schema, TaskContext, TaskYieldUpdate } from "a2a-sdk-ryukez";
+import { schema, TaskContext, TaskYieldUpdate } from "@ryukez/a2a-sdk";
 import {
   ArtifactGraph,
   UniqueArtifact,
