@@ -190,8 +190,9 @@ describe("ArtifactGraph.run (with real schema import)", () => {
       /* Condition: only run step2 when step1 result === 2 */
       const condition = {
         inputs: ["step1"] as const,
-        if: (ins: any) => {
-          const val = (ins.step1.artifact.parts[0] as any).data.result;
+        if: (context: { inputs: any }) => {
+          const val = (context.inputs.step1.artifact.parts[0] as any).data
+            .result;
           return val === 2;
         },
         then: ["step2"] as const,
@@ -237,8 +238,9 @@ describe("ArtifactGraph.run (with real schema import)", () => {
 
       const condition = {
         inputs: ["step1"] as const,
-        if: (ins: any) => {
-          const val = (ins.step1.artifact.parts[0] as any).data.result;
+        if: (context: { inputs: any }) => {
+          const val = (context.inputs.step1.artifact.parts[0] as any).data
+            .result;
           return val === 2;
         },
         then: ["step2"] as const,
