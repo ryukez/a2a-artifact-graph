@@ -183,6 +183,92 @@ describe("ArtifactGraph.run (with real schema import)", () => {
     await drain(graph.run({ task: { ...emptyTask(), artifacts: [pre] } }));
     expect(complexBuilder.build).toHaveBeenCalled();
   });
+
+  /* ---------- Condition-based Skip Logic ---------- */
+  describe("conditions", () => {
+    it("skips builder when condition is not satisfied", async () => {
+      /* Condition: only run step2 when step1 result === 2 */
+      const condition = {
+        inputs: ["step1"] as const,
+        if: (ins: any) => {
+          const val = (ins.step1.artifact.parts[0] as any).data.result;
+          return val === 2;
+        },
+        then: ["step2"] as const,
+      } as const;
+
+      const step2Spy = jest.fn(step2Builder.build);
+
+      const graph = new ArtifactGraph(
+        {
+          step1: (a: schema.Artifact) => new Step1Artifact(a),
+          step2: (a: schema.Artifact) => new Step2Artifact(a),
+        },
+        [
+          { ...step1Builder, name: "step1" },
+          { ...step2Builder, name: "step2", build: step2Spy },
+        ],
+        [condition]
+      );
+
+      const yieldedIds: string[] = [];
+      for await (const o of graph.run({ task: emptyTask() })) {
+        if ("parts" in o) {
+          yieldedIds.push((o.metadata as any)["artifactGraph.id"]);
+        }
+      }
+
+      expect(step2Spy).not.toHaveBeenCalled();
+      expect(yieldedIds).toEqual(["step1"]);
+    });
+
+    it("executes builder when condition is satisfied", async () => {
+      /* Modified step1 builder that yields result = 2 */
+      const step1BuilderPass = {
+        name: "step1",
+        inputs: () => [] as const,
+        outputs: () => ["step1"] as const,
+        build: async function* () {
+          yield new Step1Artifact({
+            parts: [{ type: "data", data: { result: 2 } }],
+          });
+        },
+      };
+
+      const condition = {
+        inputs: ["step1"] as const,
+        if: (ins: any) => {
+          const val = (ins.step1.artifact.parts[0] as any).data.result;
+          return val === 2;
+        },
+        then: ["step2"] as const,
+      } as const;
+
+      const step2Spy = jest.fn(step2Builder.build);
+
+      const graph = new ArtifactGraph(
+        {
+          step1: (a: schema.Artifact) => new Step1Artifact(a),
+          step2: (a: schema.Artifact) => new Step2Artifact(a),
+        },
+        [
+          { ...step1BuilderPass, name: "step1" },
+          { ...step2Builder, name: "step2", build: step2Spy },
+        ],
+        [condition]
+      );
+
+      const yieldedIds: string[] = [];
+      for await (const o of graph.run({ task: emptyTask() })) {
+        if ("parts" in o) {
+          yieldedIds.push((o.metadata as any)["artifactGraph.id"]);
+        }
+      }
+
+      expect(step2Spy).toHaveBeenCalledTimes(1);
+      expect(yieldedIds).toEqual(["step1", "step2"]);
+    });
+  });
 });
 
 /* ================================================== */
