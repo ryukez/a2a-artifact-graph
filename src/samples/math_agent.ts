@@ -24,10 +24,18 @@ const Step2Artifact = dataArtifact(
 
 const Step3Artifact = tuplePartsArtifact("step3", ["text"]);
 
+const Step4Artifact = dataArtifact(
+  "step4",
+  z.object({
+    value: z.number(),
+  })
+);
+
 type Artifacts = readonly [
   InstanceType<typeof Step1Artifact>,
   InstanceType<typeof Step2Artifact>,
-  InstanceType<typeof Step3Artifact>
+  InstanceType<typeof Step3Artifact>,
+  InstanceType<typeof Step4Artifact>
 ];
 
 const step1Builder = defineBuilder<Artifacts>()({
@@ -82,6 +90,19 @@ const step3Builder = defineBuilder<Artifacts>()({
   },
 });
 
+const step4Builder = defineBuilder<Artifacts>()({
+  name: "Step 4",
+  inputs: () => ["step2"] as const,
+  outputs: () => ["step4"] as const,
+  async *build({ inputs }) {
+    yield Step4Artifact.fromData({
+      data: {
+        value: inputs.step2.parsed().value * 2,
+      },
+    });
+  },
+});
+
 export async function* mathAgent({
   task,
   history,
@@ -91,8 +112,16 @@ export async function* mathAgent({
       step1: (artifact: schema.Artifact) => new Step1Artifact(artifact),
       step2: (artifact: schema.Artifact) => new Step2Artifact(artifact),
       step3: (artifact: schema.Artifact) => new Step3Artifact(artifact),
+      step4: (artifact: schema.Artifact) => new Step4Artifact(artifact),
     },
-    [step1Builder, step2Builder, step3Builder]
+    [step1Builder, step2Builder, step3Builder, step4Builder],
+    [
+      {
+        inputs: ["step1"],
+        if: (inputs) => inputs.step1.parsed().value > 10,
+        then: ["step4"],
+      },
+    ]
   );
 
   for await (const update of graph.run({ task, history, verbose: true })) {

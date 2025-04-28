@@ -47,10 +47,21 @@ export const defineBuilder =
 const isUniqueArtifact = (v: unknown): v is UniqueArtifact =>
   v instanceof UniqueArtifact;
 
+export type ArtifactCondition<
+  All extends readonly UniqueArtifact[],
+  I extends readonly (keyof ArtifactRecord<All>)[] = any,
+  O extends readonly (keyof ArtifactRecord<All>)[] = any
+> = {
+  inputs: I;
+  if: (inputs: Pick<ArtifactRecord<All>, I[number]>) => boolean;
+  then: O;
+};
+
 export class ArtifactGraph<Artifacts extends readonly UniqueArtifact[]> {
   constructor(
     private readonly artifactFactories: ArtifactFactories<Artifacts>,
-    private readonly builders: ArtifactBuilder<Artifacts, any>[]
+    private readonly builders: ArtifactBuilder<Artifacts, any, any>[],
+    private readonly conditions: ArtifactCondition<Artifacts, any, any>[] = []
   ) {
     const unreachable = findUnreachableArtifacts(builders);
     if (unreachable.length > 0) {
@@ -120,12 +131,83 @@ ${sortedBuilders
     /* ── Execution loop ── */
     for (const builders of sortedBuilders) {
       for (const builder of builders) {
-        if (skippedBuildersSet.has(builder.name)) continue;
+        // Skip builder if its outputs are already calculated
+        if (skippedBuildersSet.has(builder.name)) {
+          if (verbose) {
+            yield {
+              state: "working",
+              message: {
+                role: "agent",
+                parts: [
+                  {
+                    type: "text",
+                    text: `${builder.name} skipped because its outputs are already calculated`,
+                  },
+                ],
+              },
+            };
+          }
+          continue;
+        }
+
+        const inputKeys = builder.inputs() as (keyof typeof artifacts)[];
+        const outputKeys = builder.outputs() as (keyof typeof artifacts)[];
+
+        /** ---- Evaluate relevant conditions ---- */
+        const relevantConditions = this.conditions.filter((cond) => {
+          const condOutputs = cond.then as readonly string[];
+          return (
+            (inputKeys as readonly string[]).some((id) =>
+              condOutputs.includes(id)
+            ) ||
+            (outputKeys as readonly string[]).some((id) =>
+              condOutputs.includes(id)
+            )
+          );
+        });
+
+        let conditionsPassed = true;
+        for (const cond of relevantConditions) {
+          const required = cond.inputs as (keyof typeof artifacts)[];
+          const condInputs = {} as any;
+          for (const r of required) {
+            if (!artifacts[r]) {
+              throw new Error(
+                `${builder.name}: Condition requires artifact ${String(
+                  r
+                )} which is missing`
+              );
+            }
+            condInputs[r] = artifacts[r];
+          }
+
+          if (!cond.if(condInputs)) {
+            conditionsPassed = false;
+            break;
+          }
+        }
+
+        if (!conditionsPassed) {
+          if (verbose) {
+            yield {
+              state: "working",
+              message: {
+                role: "agent",
+                parts: [
+                  {
+                    type: "text",
+                    text: `${builder.name} skipped because condition(s) not satisfied`,
+                  },
+                ],
+              },
+            };
+          }
+          continue; // skip builder execution
+        }
 
         /** Collect required inputs */
-        const keys = builder.inputs() as (keyof typeof artifacts)[];
-        const inputs = {} as Pick<typeof artifacts, (typeof keys)[number]>;
-        for (const k of keys) {
+        const inputs = {} as Pick<typeof artifacts, (typeof inputKeys)[number]>;
+        for (const k of inputKeys) {
           if (!artifacts[k]) {
             throw new Error(
               `${builder.name}: Artifact ${String(k)} is not found`
