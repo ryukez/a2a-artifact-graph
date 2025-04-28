@@ -234,5 +234,36 @@ ${sortedBuilders
         }
       }
     }
+
+    if (verbose) {
+      // Calculate artifacts summary
+      const calculatedArtifacts: (keyof typeof artifacts)[] = [];
+      const missingArtifacts: (keyof typeof artifacts)[] = [];
+      for (const key of Object.keys(
+        this.artifactFactories
+      ) as (keyof typeof artifacts)[]) {
+        if (artifacts[key] || skippedBuildersSet.has(key)) {
+          calculatedArtifacts.push(key);
+        } else {
+          missingArtifacts.push(key);
+        }
+      }
+
+      yield {
+        state: "working",
+        message: {
+          role: "agent",
+          parts: [
+            {
+              type: "text",
+              text: `Artifacts summary:
+  ✅ Calculated: ${calculatedArtifacts.join(", ")}
+  ❌ Missing: ${missingArtifacts.join(", ")}
+              `,
+            },
+          ],
+        },
+      };
+    }
   }
 }
