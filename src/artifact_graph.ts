@@ -194,7 +194,7 @@ ${sortedBuilders
             condInputs[r] = artifacts[r];
           }
 
-          if (!cond.if(condInputs)) {
+          if (!cond.if({ inputs: condInputs })) {
             conditionsPassed = false;
             break;
           }
