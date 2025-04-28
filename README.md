@@ -13,6 +13,7 @@ It is designed to make step‑wise executions **clear, reproducible and resumabl
 - **Automatic planning** – execution order is inferred from the **artifact dependency graph**;
   you only describe _what_ you need, not _how_ to get there.
 - **Fault tolerance** – failed steps can be **resumed or retried** without re‑running the entire pipeline.
+- **Conditional execution** – declare `conditions` to skip (or allow) builders.
 
 ---
 
@@ -32,7 +33,7 @@ Below is a condensed version of `src/samples/math_agent.ts` that demonstrates th
 2. **Define Builders** (that transform those artifacts)
 3. **Run** the `ArtifactGraph`
 
-```ts
+````ts
 import { schema, TaskContext, TaskYieldUpdate } from "@ryukez/a2a-sdk";
 import {
   ArtifactGraph,
@@ -111,7 +112,31 @@ export async function* mathAgent({
     yield update;
   }
 }
-```
+
+### Conditional execution (advanced)
+
+`ArtifactGraph` optionally takes a third parameter: `conditions` – an array of objects that gate the execution of builders.
+
+```ts
+const conditions = [
+  {
+    // When this builder's `then` artifacts are concerned we need step1 to have a specific value.
+    inputs: ["step1"] as const,
+    if: (inputs) => inputs.step1.parsed().value > 0,
+    then: ["step2"] as const, // builders touching step2 will only run when the predicate is true
+  },
+];
+
+const graph = new ArtifactGraph(
+  factoryMap,
+  [step1Builder, step2Builder],
+  conditions
+);
+````
+
+At runtime, **before any builder runs**, the graph evaluates every condition whose `then` list overlaps with the builder's `inputs` or `outputs`.  
+If **all** such conditions return `true`, the builder executes; otherwise it will be skipped.  
+If an artifact listed in `condition.inputs` does not yet exist, an error is thrown so you can fix the graph design early.
 
 ---
 
