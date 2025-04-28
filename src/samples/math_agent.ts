@@ -3,6 +3,7 @@ import {
   ArtifactGraph,
   UniqueArtifact,
   defineBuilder,
+  defineCondition,
 } from "../artifact_graph";
 import assert from "assert";
 import { dataArtifact, tuplePartsArtifact } from "../artifact";
@@ -116,11 +117,11 @@ export async function* mathAgent({
     },
     [step1Builder, step2Builder, step3Builder, step4Builder],
     [
-      {
-        inputs: ["step1"],
-        if: (inputs) => inputs.step1.parsed().value > 10,
-        then: ["step4"],
-      },
+      defineCondition<Artifacts>()({
+        inputs: ["step1"] as const,
+        if: ({ inputs }) => inputs.step1.parsed().value > 10,
+        then: ["step4"] as const,
+      }),
     ]
   );
 

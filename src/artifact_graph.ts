@@ -47,13 +47,26 @@ export const defineBuilder =
 const isUniqueArtifact = (v: unknown): v is UniqueArtifact =>
   v instanceof UniqueArtifact;
 
+/**
+ * Helper to create a type-safe ArtifactCondition with full type inference.
+ */
+export const defineCondition =
+  <All extends readonly UniqueArtifact[]>() =>
+  <
+    I extends readonly (keyof ArtifactRecord<All>)[],
+    O extends readonly (keyof ArtifactRecord<All>)[]
+  >(
+    cfg: ArtifactCondition<All, I, O>
+  ) =>
+    cfg;
+
 export type ArtifactCondition<
   All extends readonly UniqueArtifact[],
   I extends readonly (keyof ArtifactRecord<All>)[] = any,
   O extends readonly (keyof ArtifactRecord<All>)[] = any
 > = {
   inputs: I;
-  if: (inputs: Pick<ArtifactRecord<All>, I[number]>) => boolean;
+  if: (context: { inputs: Pick<ArtifactRecord<All>, I[number]> }) => boolean;
   then: O;
 };
 
